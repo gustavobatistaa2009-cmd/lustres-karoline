@@ -1384,13 +1384,16 @@ function markDirty(){
 
 // PERSISTENCE
 function saveLocal(){
-  localStorage.setItem('lk_d_'+S.month,JSON.stringify(S.data));
-  localStorage.setItem('lk_m',JSON.stringify(S.metas));
-  localStorage.setItem('lk_g',JSON.stringify(S.game));
-  // also sync to Supabase in background
+  // Supabase is the source of truth - sync there first
   if(S.supabaseOk){
     sbSyncData().catch(e=>console.warn('Sync error:',e.message));
+  } else {
+    // Only save locally if Supabase is unavailable
+    localStorage.setItem('lk_d_'+S.month,JSON.stringify(S.data));
   }
+  // Always save metas and game locally as backup
+  localStorage.setItem('lk_m',JSON.stringify(S.metas));
+  localStorage.setItem('lk_g',JSON.stringify(S.game));
 }
 function loadLocal(){
   const d=localStorage.getItem('lk_d_'+S.month);if(d)S.data=JSON.parse(d);
@@ -1800,17 +1803,21 @@ async function init(){
   S.sheetId=localStorage.getItem('lk_sid')||'';
   S.userName=localStorage.getItem('lk_u')||'';
   S.dias=buildDays(S.month);
-  // load local first for instant render
-  loadLocal();updateCfgCalc();
-  renderDash();
-  // then try Supabase and re-render if data found
+  // Show loading state
   setConn('demo','Conectando...');
+  renderDash();
+  // Load from Supabase FIRST - it is the source of truth
   const loaded = await sbLoadAll();
   if(loaded){
+    // Clear any local data that might conflict
+    localStorage.removeItem('lk_d_'+S.month);
     syncCfgFields();
     renderDash();
-    toast('Dados sincronizados do Supabase!','ok');
+    toast('Dados sincronizados!','ok');
   } else {
+    // Only fall back to local if Supabase fails
+    loadLocal();updateCfgCalc();
+    renderDash();
     setConn('demo','Modo local');
   }
   const cfg={loja:S.metas.loja,com:S.metas.comercial,site:S.metas.site,maicon:S.metas.maicon,rodrigo:S.metas.rodrigo,estefany:S.metas.estefany,leads:S.metas.leads};
