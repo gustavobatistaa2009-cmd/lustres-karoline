@@ -909,7 +909,10 @@ function fatTotal(iso){return gn(iso,'loja')+fatCom(iso)+gn(iso,'rs')}
 
 function totals(){
   let fl=0,fc=0,fs=0,inv=0,pp=0,v=0,l=0;
-  S.dias.forEach(d=>{fl+=gn(d.iso,'loja');fc+=fatCom(d.iso);fs+=gn(d.iso,'rs');inv+=invT(d.iso);pp+=gn(d.iso,'pp');v+=vendasT(d.iso);l+=leadsT(d.iso)});
+  // Loja e comercial operam apenas em dias úteis (S.dias)
+  S.dias.forEach(d=>{fl+=gn(d.iso,'loja');fc+=fatCom(d.iso);v+=vendasT(d.iso);l+=leadsT(d.iso)});
+  // Site e investimento ocorrem em qualquer dia do mês, incluindo domingos
+  buildAllDays(S.month).forEach(d=>{fs+=gn(d.iso,'rs');inv+=invT(d.iso);pp+=gn(d.iso,'pp')});
   const fg=fl+fc+fs,mg=S.metas.loja+S.metas.comercial+S.metas.site;
   return{fl,fc,fs,fg,inv,pp,v,l,mg,ating:mg>0?fg/mg:0,roas:inv>0?(fc+fs)/inv:0,conv:l>0?v/l:0,tick:v>0?fc/v:0};
 }
@@ -925,7 +928,8 @@ function projectionData(){
   const remaining=S.dias.filter(d=>d.iso>today);
   const last5=worked.slice(-5);
   const avg5=last5.length>0?last5.reduce((s,d)=>s+fatTotal(d.iso),0)/last5.length:0;
-  const atual=S.dias.reduce((s,d)=>s+fatTotal(d.iso),0);
+  // Inclui domingos/feriados para capturar receita do site nesses dias
+  const atual=buildAllDays(S.month).reduce((s,d)=>s+fatTotal(d.iso),0);
   const mg=S.metas.loja+S.metas.comercial+S.metas.site;
   const proj=atual+avg5*remaining.length;
   const falta=Math.max(mg-atual,0);
@@ -1379,19 +1383,29 @@ function closePanel(e){if(!e||e.target===document.getElementById('panelOv'))docu
 function markDirty(){
   S.dirty=true;setSave('pending');
   clearTimeout(window._as);
-  window._as=setTimeout(()=>{setSave('saving');setTimeout(()=>{saveLocal();setSave('saved');S.dirty=false},400)},1200);
+  window._as=setTimeout(async ()=>{
+    setSave('saving');
+    try{
+      await saveLocalAsync();
+      setSave('saved');S.dirty=false;
+    }catch(e){
+      console.warn('Auto-save error:',e.message);
+      setSave('pending');
+      toast('Erro ao salvar. Tente novamente.','err');
+    }
+  },1200);
 }
 
 // PERSISTENCE
+async function saveLocalAsync(){
+  // Sempre salva localmente como backup
+  localStorage.setItem('lk_d_'+S.month,JSON.stringify(S.data));
+  localStorage.setItem('lk_m',JSON.stringify(S.metas));
+  localStorage.setItem('lk_g',JSON.stringify(S.game));
+  if(S.supabaseOk) await sbSyncData();
+}
 function saveLocal(){
-  // Supabase is the source of truth - sync there first
-  if(S.supabaseOk){
-    sbSyncData().catch(e=>console.warn('Sync error:',e.message));
-  } else {
-    // Only save locally if Supabase is unavailable
-    localStorage.setItem('lk_d_'+S.month,JSON.stringify(S.data));
-  }
-  // Always save metas and game locally as backup
+  localStorage.setItem('lk_d_'+S.month,JSON.stringify(S.data));
   localStorage.setItem('lk_m',JSON.stringify(S.metas));
   localStorage.setItem('lk_g',JSON.stringify(S.game));
 }
@@ -1410,7 +1424,7 @@ function saveAll(){
   if(S.supabaseOk){
     Promise.all([sbSyncData(),sbSaveMetas(),sbSaveGame()])
       .then(()=>toast('Salvo e sincronizado!','ok'))
-      .catch(()=>toast('Salvo localmente.','inf'));
+      .catch(e=>{console.warn('saveAll error:',e.message);toast('Salvo localmente (erro Supabase).','inf')});
   } else {
     toast('Salvo localmente.','inf');
   }
@@ -1814,6 +1828,7 @@ async function init(){
     syncCfgFields();
     renderDash();
     toast('Dados sincronizados!','ok');
+    startPolling();
   } else {
     // Only fall back to local if Supabase fails
     loadLocal();updateCfgCalc();
@@ -1849,6 +1864,22 @@ function syncCfgFields(){
   document.getElementById('gf-criterio').value=S.game.criterio_semana||'faturamento';
   document.getElementById('gf-premio').value=S.game.premio_semana||'';
   updateCfgCalc();
+}
+// Polling para sincronizar dados entre usuários a cada 30 segundos
+function startPolling(){
+  if(!S.supabaseOk)return;
+  setInterval(async ()=>{
+    if(document.hidden||S.dirty)return;
+    const ok=await sbLoadAll();
+    if(!ok)return;
+    const pg=document.querySelector('.page.active')?.id?.replace('page-','');
+    if(pg==='dashboard')renderDash();
+    else if(pg==='ranking')renderRanking();
+    else if(pg==='game')renderGame();
+    else if(pg==='comercial')renderComercial();
+    else if(pg==='site')renderSite();
+    else if(pg==='loja')renderLoja();
+  },30000);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
