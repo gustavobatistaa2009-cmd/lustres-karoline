@@ -338,6 +338,25 @@ input.ci.error{border-color:var(--red)!important;background:var(--red-lt)!import
 @keyframes toastIn{from{transform:translateX(16px);opacity:0}to{transform:translateX(0);opacity:1}}
 .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 
+/* ── TAB TOTALS STRIP ── */
+.tab-tot-strip{display:grid;gap:12px;margin-bottom:16px}
+.tab-tot-strip.com-grid{grid-template-columns:1fr 1fr 1fr 1.2fr}
+.tab-tot-strip.site-grid{grid-template-columns:1fr 1fr 1fr 1fr}
+.tab-tot-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.tab-tot-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px}
+.tab-tot-card.maicon::before{background:var(--maicon)}
+.tab-tot-card.rodrigo::before{background:var(--rodrigo)}
+.tab-tot-card.estefany::before{background:var(--estefany)}
+.tab-tot-card.total::before{background:var(--gold)}
+.tab-tot-card.site-rec::before{background:var(--green)}
+.tab-tot-card.site-inv::before{background:var(--red)}
+.tab-tot-card.site-roas::before{background:var(--blue)}
+.tab-tot-card.site-pp::before{background:var(--orange)}
+.tab-tot-lbl{font-size:.64rem;color:var(--ink-m);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px}
+.tab-tot-val{font-family:var(--fm);font-size:1.1rem;font-weight:700;color:var(--ink);line-height:1;margin-bottom:4px}
+.tab-tot-card.total .tab-tot-val{color:var(--gold-dk);font-size:1.25rem}
+.tab-tot-sub{font-size:.68rem;color:var(--ink-m)}
+
 /* ── GAME PAGE ── */
 .game-comp-card{background:var(--ink);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-lg);margin-bottom:4px}
 .game-comp-hdr{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid rgba(255,255,255,.06)}
@@ -526,12 +545,14 @@ input.ci.error{border-color:var(--red)!important;background:var(--red-lt)!import
           <button class="btn btn-ghost btn-sm" onclick="collapseAll()">Recolher tudo</button>
         </div>
       </div>
+      <div class="tab-tot-strip com-grid" id="comTotStrip"></div>
       <div class="com-day-list" id="comDayList"></div>
     </div>
 
     <!-- SITE -->
     <div class="page" id="page-site">
       <div class="sec">Site & Mídia Paga — Entrada Diária</div>
+      <div class="tab-tot-strip site-grid" id="siteTotStrip"></div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Dia</th><th>Invest. Facebook</th><th>Invest. Google</th><th>Total Investido</th><th>Pedidos Pagos</th><th>Receita Site</th><th>ROAS Site</th><th>ROAS Varejo</th><th>Ticket Méd.</th></tr></thead><tbody id="siteTb"></tbody></table></div></div>
     </div>
 
@@ -1160,8 +1181,65 @@ function renderRanking(){
     <div class="rank-footer">Atualizado em tempo real · Lustres Karoline ${y}</div>`;
 }
 
+function renderComTotStrip(){
+  const vm=[
+    {id:'maicon', name:'Maicon',  fk:'fl',lk:'ml',vk:'vl'},
+    {id:'rodrigo',name:'Rodrigo', fk:'fr',lk:'mr',vk:'vr'},
+    {id:'estefany',name:'Estefany',fk:'fe',lk:'me',vk:'ve'},
+  ];
+  let gtot=0;
+  const cards=vm.map(v=>{
+    const vt=vendTotals(v.fk,v.lk,v.vk);
+    gtot+=vt.fat;
+    return`<div class="tab-tot-card ${v.id}">
+      <div class="tab-tot-lbl">${v.name}</div>
+      <div class="tab-tot-val">${BRL(vt.fat)}</div>
+      <div class="tab-tot-sub">${NUM(vt.leads)} leads · ${NUM(vt.vendas)} vendas · ${PCT(vt.conv)} conv.</div>
+    </div>`;
+  });
+  const mg=S.metas.comercial,pct=mg>0?gtot/mg:0;
+  cards.push(`<div class="tab-tot-card total">
+    <div class="tab-tot-lbl">Faturamento Total Comercial</div>
+    <div class="tab-tot-val">${BRL(gtot)}</div>
+    <div class="tab-tot-sub">Meta: ${BRL(mg)} · ${PCT(pct)} atingido</div>
+  </div>`);
+  const el=document.getElementById('comTotStrip');
+  if(el)el.innerHTML=cards.join('');
+}
+
+function renderSiteTotStrip(){
+  let trs=0,tinv=0,tpp=0;
+  buildAllDays(S.month).forEach(d=>{trs+=gn(d.iso,'rs');tinv+=invT(d.iso);tpp+=gn(d.iso,'pp')});
+  const roas=tinv>0?trs/tinv:0,tick=tpp>0?trs/tpp:0;
+  const mg=S.metas.site,pct=mg>0?trs/mg:0;
+  const html=`
+    <div class="tab-tot-card site-rec">
+      <div class="tab-tot-lbl">Receita Site</div>
+      <div class="tab-tot-val">${BRL(trs)}</div>
+      <div class="tab-tot-sub">Meta: ${BRL(mg)} · ${PCT(pct)} atingido</div>
+    </div>
+    <div class="tab-tot-card site-inv">
+      <div class="tab-tot-lbl">Total Investido</div>
+      <div class="tab-tot-val">${BRL(tinv)}</div>
+      <div class="tab-tot-sub">Facebook + Google</div>
+    </div>
+    <div class="tab-tot-card site-roas">
+      <div class="tab-tot-lbl">ROAS Site</div>
+      <div class="tab-tot-val">${ROAS(roas)}</div>
+      <div class="tab-tot-sub">${roas>=3?'✓ Excelente':roas>=1.5?'→ Adequado':tinv>0?'↓ Atenção':'—'}</div>
+    </div>
+    <div class="tab-tot-card site-pp">
+      <div class="tab-tot-lbl">Pedidos Pagos</div>
+      <div class="tab-tot-val">${NUM(tpp)}</div>
+      <div class="tab-tot-sub">Ticket médio: ${BRL(tick)}</div>
+    </div>`;
+  const el=document.getElementById('siteTotStrip');
+  if(el)el.innerHTML=html;
+}
+
 // COMERCIAL VERTICAL
 function renderComercial(){
+  renderComTotStrip();
   const today=todayISO();
   document.getElementById('comDayList').innerHTML=S.dias.map(dia=>{
     const isToday=dia.iso===today,fc=fatCom(dia.iso),lt=leadsT(dia.iso),vt=vendasT(dia.iso),hasData=fc>0||lt>0;
@@ -1235,6 +1313,7 @@ function onComInput(el){
   S.data[iso]=S.data[iso]||{};
   S.data[iso][key]=el.value===''?null:parseFloat(el.value);
   const totEl=document.getElementById('tot-'+iso);if(totEl)totEl.innerHTML=buildDayTots(iso);
+  renderComTotStrip();
   const card=document.getElementById('card-'+iso);
   if(card){
     const sumEl=card.querySelector('.com-day-summary');
@@ -1246,6 +1325,7 @@ function onComInput(el){
 
 // SITE
 function renderSite(){
+  renderSiteTotStrip();
   const allDays = buildAllDays(S.month);
   const today = todayISO();
   const rows=allDays.map(dia=>{
@@ -1297,6 +1377,7 @@ function onSiteInput(el){
     if(cells[8]){cells[8].textContent=rv_r>0?rv_r.toFixed(2)+'x':'—x';cells[8].className='td-c '+(rv_r>3?'hi':rv_r>0&&rv_r<1.5?'lo':'')}
     if(cells[9]) cells[9].textContent=tkt>0?new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:0}).format(tkt):'R$ —';
   }
+  renderSiteTotStrip();
   markDirty();
 }
 
