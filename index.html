@@ -1459,21 +1459,23 @@ function exportMonth(){
     'ROAS Site','ROAS Varejo','Fat. Total do Dia'
   ].join(';'));
 
-  // Data rows
-  // export uses workdays for comercial/loja but note site has all days
-  S.dias.forEach(dia=>{
+  // Data rows — itera todos os dias; domingos/feriados só aparecem se tiverem dados de site
+  const workdaySet=new Set(S.dias.map(d=>d.iso));
+  buildAllDays(S.month).forEach(dia=>{
     const iso=dia.iso;
-    const lj=gn(iso,'loja'),lj_meta=S.metas.loja/S.dias.length,lj_saldo=lj-lj_meta,lj_pct=lj_meta>0?lj/lj_meta:0;
+    const isWorkday=workdaySet.has(iso);
+    const fb=gn(iso,'fb'),gg=gn(iso,'gg'),pp=gn(iso,'pp'),rs=gn(iso,'rs'),inv=fb+gg;
+    if(!isWorkday&&inv===0&&pp===0&&rs===0)return;
+    const lj=gn(iso,'loja'),lj_meta=isWorkday?S.metas.loja/S.dias.length:0,lj_saldo=lj-lj_meta,lj_pct=lj_meta>0?lj/lj_meta:0;
     const ml=gn(iso,'ml'),vl=gn(iso,'vl'),fl=gn(iso,'fl');
     const mr=gn(iso,'mr'),vr=gn(iso,'vr'),fr=gn(iso,'fr');
     const me=gn(iso,'me'),ve=gn(iso,'ve'),fe=gn(iso,'fe');
     const fc=fl+fr+fe,lt=ml+mr+me,vt=vl+vr+ve;
-    const fb=gn(iso,'fb'),gg=gn(iso,'gg'),pp=gn(iso,'pp'),rs=gn(iso,'rs');
-    const inv=fb+gg;
     const roasSite=inv>0?rs/inv:0,roasVarejo=inv>0?(rs+fc)/inv:0;
+    const lbl=dia.isDom?'(Dom) '+dia.label:dia.isFeriado?'(Fer) '+dia.label:dia.label;
 
     rows.push([
-      fdt(iso), dia.label,
+      fdt(iso), lbl,
       fmt(lj), fmt(lj_meta.toFixed(2)), fmt(lj_saldo.toFixed(2)), fmtPct(lj_pct),
       fmt(ml), fmt(vl), fmt(fl), fmtPct(ml>0?vl/ml:0), fmt(vl>0?(fl/vl).toFixed(2):0),
       fmt(mr), fmt(vr), fmt(fr), fmtPct(mr>0?vr/mr:0), fmt(vr>0?(fr/vr).toFixed(2):0),
@@ -1484,12 +1486,15 @@ function exportMonth(){
     ].join(';'));
   });
 
-  // Totals row
-  let tot_lj=0,tot_ml=0,tot_vl=0,tot_fl=0,tot_mr=0,tot_vr=0,tot_fr=0,tot_me=0,tot_ve=0,tot_fe=0,tot_fb=0,tot_gg=0,tot_pp=0,tot_rs=0;
+  // Totals — loja/comercial só em dias úteis; site/investimento em todos os dias
+  let tot_lj=0,tot_ml=0,tot_vl=0,tot_fl=0,tot_mr=0,tot_vr=0,tot_fr=0,tot_me=0,tot_ve=0,tot_fe=0;
   S.dias.forEach(d=>{
     tot_lj+=gn(d.iso,'loja');tot_ml+=gn(d.iso,'ml');tot_vl+=gn(d.iso,'vl');tot_fl+=gn(d.iso,'fl');
     tot_mr+=gn(d.iso,'mr');tot_vr+=gn(d.iso,'vr');tot_fr+=gn(d.iso,'fr');
     tot_me+=gn(d.iso,'me');tot_ve+=gn(d.iso,'ve');tot_fe+=gn(d.iso,'fe');
+  });
+  let tot_fb=0,tot_gg=0,tot_pp=0,tot_rs=0;
+  buildAllDays(S.month).forEach(d=>{
     tot_fb+=gn(d.iso,'fb');tot_gg+=gn(d.iso,'gg');tot_pp+=gn(d.iso,'pp');tot_rs+=gn(d.iso,'rs');
   });
   const tot_fc=tot_fl+tot_fr+tot_fe,tot_lt=tot_ml+tot_mr+tot_me,tot_vt=tot_vl+tot_vr+tot_ve;
